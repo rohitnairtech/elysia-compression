@@ -1,9 +1,9 @@
 import compressible from 'compressible'
 import { Elysia, mapResponse } from 'elysia'
-import { gzipSync, deflateSync, type ZlibCompressionOptions } from 'bun'
+import { gzipSync, deflateSync, type ZlibCompressionOptions} from 'bun'
+import { brotliCompressSync, BrotliOptions } from 'zlib'
 import { CompressionStream } from './stream'
 import { isReadableStream } from './utils'
-// import { brotliCompressSync, BrotliOptions } from 'zlib'
 
 export type CompressionOptions = {
   /**
@@ -11,13 +11,13 @@ export type CompressionOptions = {
    *
    * Algorithm to use for compression.
    */
-  type: 'gzip' | 'deflate' // | 'brotli'
+  type: 'gzip' | 'deflate' | 'brotli'
   /**
    * @param {Object}
    *
    * Options for the compression algorithm.
    */
-  options?: ZlibCompressionOptions // | BrotliOptions
+  options?: ZlibCompressionOptions | BrotliOptions
   /**
    * @default `utf-8`
    *
@@ -52,8 +52,8 @@ export const compression = (
     name: 'elysia-compression',
   })
 
-  if (!['gzip', 'deflate'].includes(type)) {
-    throw new Error('Invalid compression type. Use gzip or deflate.')
+  if (!['gzip', 'deflate', 'brotli'].includes(type)) {
+    throw new Error('Invalid compression type. Use gzip, deflate, or brotli.')
   }
 
   return app.onAfterHandle(ctx => {
@@ -81,10 +81,16 @@ export const compression = (
           toBuffer(ctx.response, encoding),
           options as ZlibCompressionOptions,
         )
-        : deflateSync(
-          toBuffer(ctx.response, encoding),
-          options as ZlibCompressionOptions,
-        )
+        : type === 'deflate'
+          ? deflateSync(
+            toBuffer(ctx.response, encoding),
+            options as ZlibCompressionOptions,
+          )
+          : brotliCompressSync(
+            toBuffer(ctx.response, encoding),
+            options as BrotliOptions,
+          )
+
     ctx.response = new Response(compressedBody, {
       headers: res.headers,
     })
